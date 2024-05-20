@@ -2,13 +2,14 @@ import torch
 import torch.nn as nn
 from torch.nn import functional as F
 
+import datetime
 # hyperparameters
 batch_size = 64 # how many independent sequences will we process in parallel?
 block_size = 256 # what is the maximum context length for predictions?
 max_iters = 5000
-eval_interval = 500
+eval_interval = 10
 learning_rate = 3e-4
-device = 'cuda' if torch.cuda.is_available() else 'cpu'
+device = 'cpu' #'cuda' if torch.cuda.is_available() else 'cpu'
 eval_iters = 200
 n_embd = 384
 n_head = 6
@@ -148,6 +149,11 @@ class GPTLanguageModel(nn.Module):
 
         # better init, not covered in the original GPT video, but important, will cover in followup video
         self.apply(self._init_weights)
+        # MB adding the proj_weights init from https://github.com/karpathy/nanoGPT/blob/master/model.py#L142
+        # apply special scaled init to the residual projections, per GPT-2 paper
+        for pn, p in self.named_parameters():
+            if pn.endswith('c_proj.weight'):
+                torch.nn.init.normal_(p, mean=0.0, std=0.02/math.sqrt(2 * config.n_layer))
 
     def _init_weights(self, module):
         if isinstance(module, nn.Linear):
@@ -195,6 +201,17 @@ class GPTLanguageModel(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
         return idx
 
+
+
+def save_checkpoint(model, optimizer, epoch):
+    checkpoint = {
+        'epoch': epoch,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict()
+    }
+    path = f'checkpoint_{epoch:05}.ckpt'
+    torch.save(checkpoint, path)
+
 model = GPTLanguageModel()
 m = model.to(device)
 # print the number of parameters in the model
@@ -203,12 +220,15 @@ print(sum(p.numel() for p in m.parameters())/1e6, 'M parameters')
 # create a PyTorch optimizer
 optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
+print(f'Training for {max_iters}.')
 for iter in range(max_iters):
-
+    timestamp = datetime.datetime.now().isoformat()[11:19]
+    print(f'Iter {iter:03} {timestamp}')
     # every once in a while evaluate the loss on train and val sets
     if iter % eval_interval == 0 or iter == max_iters - 1:
         losses = estimate_loss()
         print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
+        save_checkpoint(model, optimizer, iter)
 
     # sample a batch of data
     xb, yb = get_batch('train')
