@@ -7,7 +7,7 @@ import datetime
 batch_size = 64 # how many independent sequences will we process in parallel?
 block_size = 256 # what is the maximum context length for predictions?
 max_iters = 5000
-eval_interval = 10
+eval_interval = 25
 learning_rate = 3e-4
 device = 'cpu' #'cuda' if torch.cuda.is_available() else 'cpu'
 eval_iters = 200
@@ -201,7 +201,8 @@ class GPTLanguageModel(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1) # (B, T+1)
         return idx
 
-
+def get_timestamp():
+    return datetime.datetime.now().isoformat()[11:19]
 
 def save_checkpoint(model, optimizer, epoch):
     checkpoint = {
@@ -210,7 +211,11 @@ def save_checkpoint(model, optimizer, epoch):
         'optimizer_state_dict': optimizer.state_dict()
     }
     path = f'checkpoint_{epoch:05}.ckpt'
+    timestamp = get_timestamp()
+    print(f'Saving checkpoint {path} {timestamp}')
     torch.save(checkpoint, path)
+    timestamp = get_timestamp()
+    print(f'Done {timestamp}')
 
 model = GPTLanguageModel()
 m = model.to(device)
@@ -222,10 +227,10 @@ optimizer = torch.optim.AdamW(model.parameters(), lr=learning_rate)
 
 print(f'Training for {max_iters}.')
 for iter in range(max_iters):
-    timestamp = datetime.datetime.now().isoformat()[11:19]
-    print(f'Iter {iter:03} {timestamp}')
+    timestamp = get_timestamp()
+    print(f'Iter {iter:04} {timestamp}')
     # every once in a while evaluate the loss on train and val sets
-    if iter % eval_interval == 0 or iter == max_iters - 1:
+    if (iter+1) % eval_interval == 0 or iter == max_iters - 1:
         losses = estimate_loss()
         print(f"step {iter}: train loss {losses['train']:.4f}, val loss {losses['val']:.4f}")
         save_checkpoint(model, optimizer, iter)
